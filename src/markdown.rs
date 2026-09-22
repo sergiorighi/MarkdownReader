@@ -3,6 +3,8 @@ use pulldown_cmark::{html, Event, Options, Parser, Tag};
 use std::path::Path;
 
 const PRISM_JS: &str = include_str!("prism.js");
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+const THIRD_PARTY_NOTICES: &str = include_str!("../THIRD_PARTY_NOTICES.md");
 
 pub fn render_markdown_body(markdown_content: &str, base_dir: Option<&Path>) -> String {
     let mut options = Options::empty();
@@ -265,6 +267,27 @@ pub fn build_shell_html(config: &Config) -> String {
         }
 
         #btn-new-tab:hover {
+            background: var(--tab-hover-bg);
+            color: var(--heading-color);
+        }
+
+        #btn-about {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--muted-color);
+            font-size: 15px;
+            border-radius: 6px;
+            margin-right: 6px;
+            margin-left: auto;
+            transition: background 0.15s ease, color 0.15s ease;
+            user-select: none;
+        }
+
+        #btn-about:hover {
             background: var(--tab-hover-bg);
             color: var(--heading-color);
         }
@@ -688,12 +711,218 @@ pub fn build_shell_html(config: &Config) -> String {
         #find-box #find-close:hover {
             color: #ffffff;
         }
+
+        /* Modal Dialog Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.70);
+            backdrop-filter: blur(4px);
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-card {
+            background: #1e1e22;
+            border: 1px solid #333338;
+            border-radius: 12px;
+            width: 460px;
+            max-width: 95vw;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+            animation: modalFadeIn 0.15s ease-out;
+        }
+
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 20px 24px 16px 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            position: relative;
+        }
+
+        .modal-app-icon {
+            flex-shrink: 0;
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #18181b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-app-title h2 {
+            margin: 0;
+            font-size: 1.15em;
+            font-weight: 600;
+            color: #fafafa;
+            border: none;
+            padding: 0;
+        }
+
+        .modal-version {
+            font-size: 12px;
+            color: var(--muted-color);
+            font-family: var(--code-font-family);
+            margin-top: 2px;
+        }
+
+        .modal-close-btn {
+            position: absolute;
+            top: 16px;
+            right: 18px;
+            background: transparent;
+            border: none;
+            color: var(--muted-color);
+            font-size: 16px;
+            cursor: pointer;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+        }
+
+        .modal-close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fafafa;
+        }
+
+        .modal-body {
+            padding: 18px 24px 22px 24px;
+        }
+
+        .modal-desc {
+            font-size: 13.5px;
+            color: #d4d4d8;
+            margin-bottom: 16px;
+            line-height: 1.45;
+        }
+
+        .modal-meta-section {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 16px;
+        }
+
+        .modal-meta-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12.5px;
+            padding: 4px 0;
+        }
+
+        .modal-meta-row:not(:last-child) {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .modal-meta-label {
+            color: var(--muted-color);
+        }
+
+        .modal-meta-value {
+            color: #fafafa;
+            font-weight: 500;
+        }
+
+        .modal-footer-links {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .modal-link-btn {
+            background: transparent;
+            border: 1px solid #3f3f46;
+            color: #93c5fd;
+            font-size: 12px;
+            padding: 5px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-family: var(--font-family);
+        }
+
+        .modal-link-btn:hover {
+            background: rgba(59, 130, 246, 0.12);
+            border-color: #3b82f6;
+            color: #bfdbfe;
+        }
+
+        .modal-notices-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .modal-back-btn {
+            background: transparent;
+            border: none;
+            color: #60a5fa;
+            font-size: 12.5px;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 4px;
+            font-family: var(--font-family);
+        }
+
+        .modal-back-btn:hover {
+            text-decoration: underline;
+        }
+
+        .modal-notices-title {
+            font-size: 12px;
+            color: var(--muted-color);
+            font-weight: 500;
+        }
+
+        .modal-notices-scroll {
+            max-height: 280px;
+            overflow-y: auto;
+            background: #141416;
+            border: 1px solid #27272a;
+            border-radius: 6px;
+            padding: 10px 12px;
+        }
+
+        .modal-notices-text {
+            font-family: var(--code-font-family);
+            font-size: 11px;
+            color: #a1a1aa;
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            border: none;
+            line-height: 1.45;
+        }
     </style>
 </head>
 <body>
     <div id="tab-bar">
         <div id="tab-list"></div>
         <div id="btn-new-tab" title="Abrir Arquivo (Ctrl+O)">+</div>
+        <div id="btn-about" title="About MarkdownReader">&#x24D8;</div>
     </div>
 
     <div id="find-box">
@@ -701,6 +930,54 @@ pub fn build_shell_html(config: &Config) -> String {
         <button id="find-prev" title="Anterior (Shift+Enter)">&#x25B2;</button>
         <button id="find-next" title="Próximo (Enter)">&#x25BC;</button>
         <button id="find-close" title="Fechar (Esc)">&#x2715;</button>
+    </div>
+
+    <div id="about-overlay" class="modal-overlay" style="display: none;">
+        <div class="modal-card" id="about-modal-card">
+            <div class="modal-header">
+                <div class="modal-app-icon">
+                    <img src="http://mdasset.localhost/__app_icon.png" width="44" height="44" alt="MarkdownReader" style="margin: 0; border-radius: 8px;" />
+                </div>
+                <div class="modal-app-title">
+                    <h2>MarkdownReader</h2>
+                    <div class="modal-version">Version __APP_VERSION__</div>
+                </div>
+                <button class="modal-close-btn" id="about-close-btn" title="Close (Esc)">&#x2715;</button>
+            </div>
+            
+            <div class="modal-body" id="about-main-view">
+                <p class="modal-desc">Lightweight Markdown Reader for Windows</p>
+                
+                <div class="modal-meta-section">
+                    <div class="modal-meta-row">
+                        <span class="modal-meta-label">Author</span>
+                        <span class="modal-meta-value">Sergio Righi</span>
+                    </div>
+                    <div class="modal-meta-row">
+                        <span class="modal-meta-label">Copyright</span>
+                        <span class="modal-meta-value">&copy; 2026 Sergio Righi</span>
+                    </div>
+                    <div class="modal-meta-row">
+                        <span class="modal-meta-label">License</span>
+                        <span class="modal-meta-value">MIT License</span>
+                    </div>
+                </div>
+
+                <div class="modal-footer-links">
+                    <button class="modal-link-btn" id="btn-show-notices">Third-Party Notices</button>
+                </div>
+            </div>
+
+            <div class="modal-body" id="about-notices-view" style="display: none;">
+                <div class="modal-notices-header">
+                    <button class="modal-back-btn" id="btn-notices-back">&larr; Back to About</button>
+                    <span class="modal-notices-title">Third-Party Notices</span>
+                </div>
+                <div class="modal-notices-scroll">
+                    <pre class="modal-notices-text">__THIRD_PARTY_NOTICES__</pre>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="tab-panes"></div>
@@ -1265,6 +1542,53 @@ pub fn build_shell_html(config: &Config) -> String {
                 notifyRust({ action: 'open_file' });
             });
 
+            // About modal implementation
+            const btnAbout = document.getElementById('btn-about');
+            const aboutOverlay = document.getElementById('about-overlay');
+            const aboutCloseBtn = document.getElementById('about-close-btn');
+            const aboutMainView = document.getElementById('about-main-view');
+            const aboutNoticesView = document.getElementById('about-notices-view');
+            const btnShowNotices = document.getElementById('btn-show-notices');
+            const btnNoticesBack = document.getElementById('btn-notices-back');
+
+            function openAbout() {
+                if (aboutMainView && aboutNoticesView) {
+                    aboutMainView.style.display = 'block';
+                    aboutNoticesView.style.display = 'none';
+                }
+                if (aboutOverlay) {
+                    aboutOverlay.style.display = 'flex';
+                }
+            }
+
+            function closeAbout() {
+                if (aboutOverlay) {
+                    aboutOverlay.style.display = 'none';
+                }
+            }
+
+            if (btnAbout) btnAbout.addEventListener('click', openAbout);
+            if (aboutCloseBtn) aboutCloseBtn.addEventListener('click', closeAbout);
+            if (aboutOverlay) {
+                aboutOverlay.addEventListener('click', (e) => {
+                    if (e.target === aboutOverlay) {
+                        closeAbout();
+                    }
+                });
+            }
+            if (btnShowNotices && aboutMainView && aboutNoticesView) {
+                btnShowNotices.addEventListener('click', () => {
+                    aboutMainView.style.display = 'none';
+                    aboutNoticesView.style.display = 'block';
+                });
+            }
+            if (btnNoticesBack && aboutMainView && aboutNoticesView) {
+                btnNoticesBack.addEventListener('click', () => {
+                    aboutNoticesView.style.display = 'none';
+                    aboutMainView.style.display = 'block';
+                });
+            }
+
             // In-page search implementation
             const findBox = document.getElementById('find-box');
             const findInput = document.getElementById('find-input');
@@ -1306,7 +1630,11 @@ pub fn build_shell_html(config: &Config) -> String {
                         window.nextTab();
                     }
                 } else if (e.key === 'Escape') {
-                    closeFind();
+                    if (aboutOverlay && aboutOverlay.style.display !== 'none') {
+                        closeAbout();
+                    } else {
+                        closeFind();
+                    }
                 } else if (e.key === 'F3') {
                     e.preventDefault();
                     doFind(e.shiftKey);
@@ -1337,6 +1665,16 @@ pub fn build_shell_html(config: &Config) -> String {
         .replace("__FONT_SIZE__", &config.font_size.to_string())
         .replace("__CONTENT_WIDTH__", &config.content_width.to_string())
         .replace("__PRISM_BUNDLE__", PRISM_JS)
+        .replace("__APP_VERSION__", APP_VERSION)
+        .replace("__THIRD_PARTY_NOTICES__", &escape_html_text(THIRD_PARTY_NOTICES))
+}
+
+fn escape_html_text(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
 #[cfg(test)]
@@ -1375,6 +1713,7 @@ mod tests {
         assert!(shell.contains("id=\"tab-bar\""));
         assert!(shell.contains("id=\"tab-list\""));
         assert!(shell.contains("id=\"btn-new-tab\""));
+        assert!(shell.contains("id=\"btn-about\""));
         assert!(shell.contains("id=\"find-box\""));
         assert!(shell.contains("id=\"tab-panes\""));
         assert!(shell.contains("window.addOrActivateTab"));
@@ -1423,5 +1762,24 @@ mod tests {
         assert!(shell.contains("renderMermaidBlocks"));
         assert!(shell.contains("__mermaid.min.js"));
         assert!(shell.contains("http://mdasset.localhost"));
+    }
+
+    #[test]
+    fn test_about_modal_shell_integration() {
+        let config = Config::default();
+        let shell = build_shell_html(&config);
+
+        assert!(shell.contains("id=\"btn-about\""));
+        assert!(shell.contains("id=\"about-overlay\""));
+        assert!(shell.contains("id=\"about-modal-card\""));
+        assert!(shell.contains("id=\"about-close-btn\""));
+        assert!(shell.contains("id=\"btn-show-notices\""));
+        assert!(shell.contains("id=\"btn-notices-back\""));
+        assert!(shell.contains("Version 1.0.0"));
+        assert!(shell.contains("Sergio Righi"));
+        assert!(shell.contains("© 2026 Sergio Righi") || shell.contains("&copy; 2026 Sergio Righi"));
+        assert!(shell.contains("MIT License"));
+        assert!(shell.contains("__app_icon.png"));
+        assert!(shell.contains("Third-Party Software Notices"));
     }
 }

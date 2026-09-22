@@ -19,6 +19,12 @@ fn main() {
     let rgba_path = assets_dir.join("icon_32.rgba");
     fs::write(&rgba_path, &rgba_32).unwrap();
 
+    // Write 48x48 PNG for About modal icon
+    let rgba_48 = render_icon_rgba(48, 48);
+    let png_48 = encode_png(48, 48, &rgba_48);
+    let png_48_path = assets_dir.join("app_icon_48.png");
+    fs::write(&png_48_path, &png_48).unwrap();
+
     // Ensure sample test images exist
     let images_dir = Path::new("images");
     if !images_dir.exists() {

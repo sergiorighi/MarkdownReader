@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use wry::http::{Request, Response};
 
 const MERMAID_JS: &[u8] = include_bytes!("../assets/mermaid.min.js");
+const APP_ICON_PNG: &[u8] = include_bytes!("../assets/app_icon_48.png");
 
 pub fn handle_asset_request(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
     let uri = request.uri().to_string();
@@ -15,6 +16,16 @@ pub fn handle_asset_request(request: Request<Vec<u8>>) -> Response<Cow<'static, 
             .header("Access-Control-Allow-Origin", "*")
             .header("Cache-Control", "no-cache")
             .body(Cow::Borrowed(MERMAID_JS))
+            .unwrap_or_else(|_| not_found());
+    }
+
+    if uri.contains("__app_icon.png") {
+        return Response::builder()
+            .status(200)
+            .header("Content-Type", "image/png")
+            .header("Access-Control-Allow-Origin", "*")
+            .header("Cache-Control", "no-cache")
+            .body(Cow::Borrowed(APP_ICON_PNG))
             .unwrap_or_else(|_| not_found());
     }
     
@@ -124,6 +135,16 @@ mod tests {
         let res = handle_asset_request(req);
         assert_eq!(res.status(), 200);
         assert_eq!(res.headers().get("Content-Type").unwrap(), "application/javascript; charset=utf-8");
+        assert!(!res.body().is_empty());
+    }
+
+    #[test]
+    fn test_handle_asset_app_icon() {
+        let uri = "http://mdasset.localhost/__app_icon.png";
+        let req = Request::builder().uri(uri).body(Vec::new()).unwrap();
+        let res = handle_asset_request(req);
+        assert_eq!(res.status(), 200);
+        assert_eq!(res.headers().get("Content-Type").unwrap(), "image/png");
         assert!(!res.body().is_empty());
     }
 }

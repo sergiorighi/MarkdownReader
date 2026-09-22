@@ -13,6 +13,7 @@ EBWebView/
 # Logs and local temporary files
 *.log
 startup.log
+resume_IA.txt
 
 # IDE & Editor files
 .idea/

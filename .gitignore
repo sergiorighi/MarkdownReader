@@ -1,0 +1,26 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Distribution artifacts (built separately)
+/dist/
+
+# WebView2 runtime cache & temporary data
+*.WebView2/
+EBWebView/
+
+# Logs and local temporary files
+*.log
+startup.log
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+
+# OS generated files
+Thumbs.db
+[Dd]esktop.ini

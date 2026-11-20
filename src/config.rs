@@ -21,6 +21,8 @@ pub struct Config {
     pub content_width: u32,
     #[serde(default = "default_theme")]
     pub theme: String,
+    #[serde(default = "default_language")]
+    pub language: String,
 }
 
 fn default_font_family() -> String {
@@ -43,6 +45,10 @@ fn default_theme() -> String {
     "dark".to_string()
 }
 
+fn default_language() -> String {
+    "system".to_string()
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -56,6 +62,7 @@ impl Default for Config {
             font_size: default_font_size(),
             content_width: default_content_width(),
             theme: default_theme(),
+            language: default_language(),
         }
     }
 }
@@ -137,11 +144,13 @@ mod tests {
         assert_eq!(config.font_size, 16.0);
         assert_eq!(config.content_width, 960);
         assert_eq!(config.theme, "dark");
+        assert_eq!(config.language, "system");
 
         let json = serde_json::to_string(&config).expect("Serialize error");
         let parsed: Config = serde_json::from_str(&json).expect("Deserialize error");
         assert_eq!(parsed.width, 1024);
         assert_eq!(parsed.height, 768);
+        assert_eq!(parsed.language, "system");
     }
 }
 

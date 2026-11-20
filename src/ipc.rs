@@ -14,6 +14,7 @@ pub enum UserEvent {
     UpdateTitle,
     OpenWelcome,
     ActivateWindow,
+    SetLanguage(String),
 }
 
 pub fn try_send_to_existing_instance(file_path: Option<&Path>) -> bool {

@@ -116,9 +116,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if uri.starts_with('#') || uri.starts_with("about:blank#") {
                 return true;
             }
-            // Allow custom asset protocol
+            // Asset URLs are only for subresources, never top-level navigation.
             if uri.starts_with("http://mdasset.localhost") || uri.starts_with("https://mdasset.localhost") {
-                return true;
+                return false;
             }
             // External links (http, https, mailto) open in default browser
             if uri.starts_with("http://") || uri.starts_with("https://") || uri.starts_with("mailto:") {
@@ -154,6 +154,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         "all_tabs_closed" => {
                             let _ = proxy_for_ipc.send_event(UserEvent::OpenWelcome);
+                        }
+                        "set_language" => {
+                            if let Some(language) = parsed.get("language").and_then(|value| value.as_str()) {
+                                if matches!(
+                                    language,
+                                    "system" | "en" | "zh" | "es" | "hi" | "pt" | "de" | "ja" | "fr" | "ru" | "ko"
+                                ) {
+                                    let _ = proxy_for_ipc.send_event(UserEvent::SetLanguage(language.to_string()));
+                                }
+                            }
                         }
                         _ => {}
                     }
@@ -288,6 +298,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Event::UserEvent(UserEvent::ActivateWindow) => {
                 window.set_minimized(false);
                 window.set_focus();
+            }
+            Event::UserEvent(UserEvent::SetLanguage(language)) => {
+                config.language = language;
+                let _ = config.save();
             }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,

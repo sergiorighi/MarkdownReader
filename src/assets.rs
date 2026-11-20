@@ -1,10 +1,28 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+use uuid::Uuid;
 use wry::http::{Request, Response};
 
 const MERMAID_JS: &[u8] = include_bytes!("../assets/mermaid.min.js");
 const APP_ICON_PNG: &[u8] = include_bytes!("../assets/app_icon_48.png");
+static REGISTERED_ASSETS: OnceLock<Mutex<HashMap<String, PathBuf>>> = OnceLock::new();
+
+pub fn register_asset(path: PathBuf) -> Option<String> {
+    if !is_supported_image(&path) {
+        return None;
+    }
+
+    let token = format!("asset-{}", Uuid::new_v4().simple());
+    REGISTERED_ASSETS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .expect("asset registry mutex poisoned")
+        .insert(token.clone(), path);
+    Some(token)
+}
 
 pub fn handle_asset_request(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
     let uri = request.uri().to_string();
@@ -13,7 +31,6 @@ pub fn handle_asset_request(request: Request<Vec<u8>>) -> Response<Cow<'static, 
         return Response::builder()
             .status(200)
             .header("Content-Type", "application/javascript; charset=utf-8")
-            .header("Access-Control-Allow-Origin", "*")
             .header("Cache-Control", "no-cache")
             .body(Cow::Borrowed(MERMAID_JS))
             .unwrap_or_else(|_| not_found());
@@ -23,38 +40,19 @@ pub fn handle_asset_request(request: Request<Vec<u8>>) -> Response<Cow<'static, 
         return Response::builder()
             .status(200)
             .header("Content-Type", "image/png")
-            .header("Access-Control-Allow-Origin", "*")
             .header("Cache-Control", "no-cache")
             .body(Cow::Borrowed(APP_ICON_PNG))
             .unwrap_or_else(|_| not_found());
     }
     
-    // Extract path from URI (e.g. "mdasset://localhost/E:/path/to/img.png" or "http://mdasset.localhost/E:/path/to/img.png")
-    let raw_path = if let Some(idx) = uri.find("://") {
-        let after_scheme = &uri[idx + 3..];
-        if let Some(slash_idx) = after_scheme.find('/') {
-            &after_scheme[slash_idx..]
-        } else {
-            ""
-        }
-    } else {
-        request.uri().path()
+    let token = request.uri().path().trim_start_matches('/');
+    let Some(file_path) = REGISTERED_ASSETS
+        .get()
+        .and_then(|assets| assets.lock().ok())
+        .and_then(|assets| assets.get(token).cloned())
+    else {
+        return not_found();
     };
-
-    // Strip query string and fragment
-    let no_query = raw_path.split('?').next().unwrap_or(raw_path).split('#').next().unwrap_or(raw_path);
-
-    let decoded_path = percent_encoding::percent_decode_str(no_query)
-        .decode_utf8_lossy()
-        .to_string();
-
-    let mut clean_path = decoded_path.as_str();
-    // On Windows, "/C:/..." or "/E:/..." needs leading slash removed
-    if clean_path.starts_with('/') && clean_path.len() > 2 && clean_path.chars().nth(2) == Some(':') {
-        clean_path = &clean_path[1..];
-    }
-
-    let file_path = PathBuf::from(clean_path);
 
     if file_path.is_file() {
         if let Ok(bytes) = fs::read(&file_path) {
@@ -62,7 +60,8 @@ pub fn handle_asset_request(request: Request<Vec<u8>>) -> Response<Cow<'static, 
             return Response::builder()
                 .status(200)
                 .header("Content-Type", mime)
-                .header("Access-Control-Allow-Origin", "*")
+                .header("Content-Security-Policy", "sandbox; default-src 'none'")
+                .header("X-Content-Type-Options", "nosniff")
                 .header("Cache-Control", "no-cache")
                 .body(Cow::Owned(bytes))
                 .unwrap_or_else(|_| not_found());
@@ -80,20 +79,45 @@ fn not_found() -> Response<Cow<'static, [u8]>> {
         .unwrap()
 }
 
+const DEFAULT_MIME_TYPE: &str = "application/octet-stream";
+const MIME_TYPES: &[(&str, &str)] = &[
+    ("png", "image/png"),
+    ("jpg", "image/jpeg"),
+    ("jpeg", "image/jpeg"),
+    ("gif", "image/gif"),
+    ("svg", "image/svg+xml"),
+    ("webp", "image/webp"),
+    ("avif", "image/avif"),
+    ("bmp", "image/bmp"),
+    ("ico", "image/x-icon"),
+    ("css", "text/css; charset=utf-8"),
+    ("js", "application/javascript; charset=utf-8"),
+];
+
 fn get_mime_type(path: &Path) -> &'static str {
-    match path.extension().and_then(|s| s.to_str()).map(|s| s.to_ascii_lowercase()).as_deref() {
-        Some("png") => "image/png",
-        Some("jpg") | Some("jpeg") => "image/jpeg",
-        Some("gif") => "image/gif",
-        Some("svg") => "image/svg+xml",
-        Some("webp") => "image/webp",
-        Some("avif") => "image/avif",
-        Some("bmp") => "image/bmp",
-        Some("ico") => "image/x-icon",
-        Some("css") => "text/css; charset=utf-8",
-        Some("js") => "application/javascript; charset=utf-8",
-        _ => "application/octet-stream",
-    }
+    let Some(extension) = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.to_ascii_lowercase())
+    else {
+        return DEFAULT_MIME_TYPE;
+    };
+
+    MIME_TYPES
+        .iter()
+        .find(|(candidate, _)| *candidate == extension)
+        .map_or(DEFAULT_MIME_TYPE, |(_, mime_type)| *mime_type)
+}
+
+fn is_supported_image(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.to_ascii_lowercase())
+        .is_some_and(|extension| {
+            MIME_TYPES
+                .iter()
+                .any(|(candidate, mime)| *candidate == extension && mime.starts_with("image/"))
+        })
 }
 
 #[cfg(test)]
@@ -115,17 +139,30 @@ mod tests {
 
     #[test]
     fn test_handle_asset_svg() {
-        let svg_path = Path::new("images/vector.svg");
+        let svg_path = PathBuf::from("images/vector.svg");
+        let token = register_asset(svg_path.clone()).unwrap();
+        let uri = format!("http://mdasset.localhost/{token}");
+        let req = Request::builder().uri(uri).body(Vec::new()).unwrap();
+        let res = handle_asset_request(req);
+        assert_eq!(res.status(), if svg_path.exists() { 200 } else { 404 });
         if svg_path.exists() {
-            let canonical = svg_path.canonicalize().unwrap();
-            let path_str = canonical.to_string_lossy().replace('\\', "/");
-            let clean = path_str.trim_start_matches("//?/").trim_start_matches(r"\\?\");
-            let uri = format!("http://mdasset.localhost/{}", clean);
-            let req = Request::builder().uri(uri).body(Vec::new()).unwrap();
-            let res = handle_asset_request(req);
-            assert_eq!(res.status(), 200);
             assert_eq!(res.headers().get("Content-Type").unwrap(), "image/svg+xml");
         }
+    }
+
+    #[test]
+    fn register_asset_rejects_non_image_paths() {
+        assert!(register_asset(PathBuf::from("C:/secret.txt")).is_none());
+        assert!(register_asset(PathBuf::from("C:/script.js")).is_none());
+    }
+
+    #[test]
+    fn unregistered_asset_paths_are_rejected() {
+        let uri = "http://mdasset.localhost/C:/Windows/win.ini";
+        let req = Request::builder().uri(uri).body(Vec::new()).unwrap();
+        let res = handle_asset_request(req);
+        assert_eq!(res.status(), 404);
+        assert!(res.headers().get("Access-Control-Allow-Origin").is_none());
     }
 
     #[test]

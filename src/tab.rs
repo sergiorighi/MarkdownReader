@@ -40,10 +40,10 @@ impl DocumentTab {
 A lightweight, fast, native Markdown viewer for Windows.
 
 ### Shortcuts & Tabs
-* **Open File** — Click `+` or press <kbd>Ctrl</kbd>+<kbd>O</kbd>.
-* **Close Tab** — Click `×`, middle-click tab, or press <kbd>Ctrl</kbd>+<kbd>W</kbd>.
-* **Switch Tabs** — Click a tab or press <kbd>Ctrl</kbd>+<kbd>Tab</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd>.
-* **In-page Search** — Press <kbd>Ctrl</kbd>+<kbd>F</kbd>.
+* **Open File** — Click `+` or press `Ctrl+O`.
+* **Close Tab** — Click `×`, middle-click tab, or press `Ctrl+W`.
+* **Switch Tabs** — Click a tab or press `Ctrl+Tab` / `Ctrl+Shift+Tab`.
+* **In-page Search** — Press `Ctrl+F`.
 
 ### Features
 * **Single WebView2 Engine** — Ultra lightweight, fast tab switching with independent scroll preservation.

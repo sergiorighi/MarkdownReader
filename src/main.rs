@@ -116,9 +116,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if uri.starts_with('#') || uri.starts_with("about:blank#") {
                 return true;
             }
-            // Allow custom asset protocol
+            // Asset URLs are only for subresources, never top-level navigation.
             if uri.starts_with("http://mdasset.localhost") || uri.starts_with("https://mdasset.localhost") {
-                return true;
+                return false;
             }
             // External links (http, https, mailto) open in default browser
             if uri.starts_with("http://") || uri.starts_with("https://") || uri.starts_with("mailto:") {

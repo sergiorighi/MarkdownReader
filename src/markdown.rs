@@ -16,13 +16,27 @@ pub fn render_markdown_body(markdown_content: &str, base_dir: Option<&Path>) -> 
 
     let parser = Parser::new_ext(markdown_content, options);
 
-    // Transform image events to rewrite relative paths to custom asset protocol
+    // Untrusted HTML must remain text; Markdown itself provides the supported rich formatting.
     let events = parser.map(|event| match event {
+        Event::Html(html) | Event::InlineHtml(html) => Event::Text(html),
         Event::Start(Tag::Image { link_type, dest_url, title, id }) => {
             let rewritten_url = rewrite_image_url(&dest_url, base_dir);
             Event::Start(Tag::Image {
                 link_type,
                 dest_url: rewritten_url.into(),
+                title,
+                id,
+            })
+        }
+        Event::Start(Tag::Link { link_type, dest_url, title, id }) => {
+            let safe_url = if let Some(url) = normalize_safe_web_url(&dest_url) {
+                url.into()
+            } else {
+                "#".into()
+            };
+            Event::Start(Tag::Link {
+                link_type,
+                dest_url: safe_url,
                 title,
                 id,
             })
@@ -36,12 +50,12 @@ pub fn render_markdown_body(markdown_content: &str, base_dir: Option<&Path>) -> 
 }
 
 fn rewrite_image_url(url: &str, base_dir: Option<&Path>) -> String {
-    if url.starts_with("http://")
-        || url.starts_with("https://")
-        || url.starts_with("data:")
-        || url.starts_with("blob:")
-    {
+    if is_safe_remote_image_url(url) {
         return url.to_string();
+    }
+
+    if has_url_scheme(url) {
+        return String::new();
     }
 
     if let Some(base) = base_dir {
@@ -50,11 +64,11 @@ fn rewrite_image_url(url: &str, base_dir: Option<&Path>) -> String {
         let clean_rel = decoded.split('?').next().unwrap_or(&decoded).split('#').next().unwrap_or(&decoded);
 
         let path = Path::new(clean_rel);
-        let resolved = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            base.join(path)
-        };
+        if path.is_absolute() {
+            return String::new();
+        }
+
+        let resolved = base.join(path);
 
         let final_path = if let Ok(canonical) = resolved.canonicalize() {
             canonical
@@ -65,26 +79,77 @@ fn rewrite_image_url(url: &str, base_dir: Option<&Path>) -> String {
         let path_str = final_path.to_string_lossy().replace('\\', "/");
         let clean_path = path_str.trim_start_matches("//?/").trim_start_matches(r"\\?\");
 
-        // Percent-encode each path segment for a safe and standard URL
-        let mut encoded_path = String::new();
-        for (i, segment) in clean_path.split('/').enumerate() {
-            if i > 0 {
-                encoded_path.push('/');
-            }
-            if i == 0 && segment.ends_with(':') {
-                encoded_path.push_str(segment);
-            } else {
-                encoded_path.push_str(&percent_encoding::utf8_percent_encode(
-                    segment,
-                    percent_encoding::NON_ALPHANUMERIC,
-                ).to_string());
-            }
-        }
-
-        return format!("http://mdasset.localhost/{}", encoded_path);
+        let Some(token) = crate::assets::register_asset(Path::new(clean_path).to_path_buf()) else {
+            return String::new();
+        };
+        return format!("http://mdasset.localhost/{token}");
     }
 
     url.to_string()
+}
+
+fn has_url_scheme(url: &str) -> bool {
+    url.trim_start_matches(|c: char| c.is_ascii_whitespace() || c.is_ascii_control())
+        .split_once(':')
+        .map(|(scheme, _)| {
+            let normalized: String = scheme
+                .chars()
+                .filter(|c| !c.is_ascii_whitespace() && !c.is_ascii_control())
+                .collect();
+            let mut chars = normalized.chars();
+            matches!(chars.next(), Some(first) if first.is_ascii_alphabetic())
+                && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+        })
+        .unwrap_or(false)
+}
+
+fn normalized_scheme(url: &str) -> Option<String> {
+    url.trim_start_matches(|c: char| c.is_ascii_whitespace() || c.is_ascii_control())
+        .split_once(':')
+        .map(|(scheme, _)| {
+            scheme
+                .chars()
+                .filter(|c| !c.is_ascii_whitespace() && !c.is_ascii_control())
+                .flat_map(char::to_lowercase)
+                .collect()
+        })
+}
+
+fn normalize_safe_web_url(url: &str) -> Option<String> {
+    if !has_url_scheme(url) {
+        return Some(url.to_string());
+    }
+
+    let scheme = normalized_scheme(url)?;
+    if !matches!(scheme.as_str(), "http" | "https" | "mailto") {
+        return None;
+    }
+    if is_mdasset_url(url) {
+        return None;
+    }
+
+    let (_, remainder) = url.split_once(':')?;
+    Some(format!("{scheme}:{remainder}"))
+}
+
+fn is_safe_remote_image_url(url: &str) -> bool {
+    let Some(scheme) = normalized_scheme(url) else {
+        return false;
+    };
+
+    match scheme.as_str() {
+        "data" | "blob" => true,
+        "http" | "https" => !is_mdasset_url(url),
+        _ => false,
+    }
+}
+
+fn is_mdasset_url(url: &str) -> bool {
+    let normalized = url
+        .trim_start_matches(|c: char| c.is_ascii_whitespace() || c.is_ascii_control())
+        .to_ascii_lowercase();
+    normalized.starts_with("http://mdasset.localhost")
+        || normalized.starts_with("https://mdasset.localhost")
 }
 
 pub fn build_shell_html(config: &Config) -> String {
@@ -93,7 +158,7 @@ pub fn build_shell_html(config: &Config) -> String {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://mdasset.localhost https://mdasset.localhost data: https: http: 'unsafe-inline'; script-src 'unsafe-inline' http://mdasset.localhost;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' http://mdasset.localhost https://mdasset.localhost data: blob: https: http:; style-src 'unsafe-inline'; script-src 'unsafe-inline' http://mdasset.localhost; font-src 'self' data:; connect-src 'none'; base-uri 'none'; object-src 'none'; frame-src 'none';">
     <title>MarkdownReader</title>
     <style>
         :root {
@@ -1873,9 +1938,56 @@ mod tests {
         let md = "![Image](images/photo.png)\n![With Space](images/photo%20with%20space.png)\n![Acentuada](fotos/imagem%20com%20espa%C3%A7o%20e%20a%C3%A7%C3%A3o.png)\n![External](https://example.com/img.png)";
         let html = render_markdown_body(md, Some(base));
 
-        assert!(html.contains("http://mdasset.localhost/"));
-        assert!(html.contains("images/photo.png") || html.contains("images/photo"));
+        assert!(html.contains("http://mdasset.localhost/asset-"));
+        assert!(!html.contains("E:/Docs"));
+        assert!(!html.contains("images/photo.png"));
         assert!(html.contains("https://example.com/img.png"));
+    }
+
+    #[test]
+    fn raw_html_is_rendered_as_inert_text() {
+        let html = render_markdown_body(
+            "<script>alert('x')</script>\n\n<img src=x onerror=alert('x')>",
+            None,
+        );
+
+        assert!(!html.contains("<script>"));
+        assert!(!html.contains("<img"));
+        assert!(html.contains("&lt;script&gt;"));
+        assert!(html.contains("&lt;img"));
+    }
+
+    #[test]
+    fn unsafe_link_and_image_schemes_are_neutralized() {
+        let html = render_markdown_body(
+            "[link](javascript:alert(1))\n\n[obfuscated](java\\\nscript:alert(1))\n\n![image](file:///C:/secret.png)\n\n![forged](http://mdasset.localhost/asset-1)",
+            Some(Path::new("C:/Docs")),
+        );
+
+        assert!(html.contains("href=\"#\""));
+        assert!(!html.contains("javascript:"));
+        assert!(!html.contains("file:///C:/secret.png"));
+        assert!(!html.contains("http://mdasset.localhost/asset-1"));
+    }
+
+    #[test]
+    fn absolute_local_image_paths_are_neutralized() {
+        let html = render_markdown_body(
+            "![secret](C:/Windows/Web/Wallpaper/image.png)",
+            Some(Path::new("C:/Docs")),
+        );
+
+        assert!(!html.contains("mdasset.localhost"));
+        assert!(!html.contains("C:/Windows"));
+    }
+
+    #[test]
+    fn shell_csp_blocks_network_fetches_and_frames() {
+        let shell = build_shell_html(&Config::default());
+
+        assert!(shell.contains("connect-src 'none'"));
+        assert!(shell.contains("object-src 'none'"));
+        assert!(shell.contains("frame-src 'none'"));
     }
 
     #[test]
